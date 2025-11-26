@@ -27,23 +27,42 @@ const ensureDataDir = () => {
 async function handleGet() {
   try {
     const dataDir = ensureDataDir();
+    
+    // ถ้าไม่มี directory หรือไม่มีไฟล์ ให้ return empty array
     if (!fs.existsSync(dataDir)) {
-      return { statusCode: 200, body: JSON.stringify({ data: [] }) };
+      return {
+        statusCode: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type'
+        },
+        body: JSON.stringify({ data: [] })
+      };
     }
     
-    const files = fs.readdirSync(dataDir)
-      .filter(f => f.endsWith('.json'))
-      .map(f => {
-        try {
-          const content = fs.readFileSync(path.join(dataDir, f), 'utf8');
-          return JSON.parse(content);
-        } catch (e) {
-          console.error(`Error reading ${f}:`, e);
-          return null;
-        }
-      })
-      .filter(Boolean)
-      .sort((a, b) => (b.submittedAt || b.submitted_at || 0) - (a.submittedAt || a.submitted_at || 0));
+    let files = [];
+    try {
+      const fileList = fs.readdirSync(dataDir);
+      files = fileList
+        .filter(f => f.endsWith('.json'))
+        .map(f => {
+          try {
+            const content = fs.readFileSync(path.join(dataDir, f), 'utf8');
+            return JSON.parse(content);
+          } catch (e) {
+            console.error(`Error reading ${f}:`, e);
+            return null;
+          }
+        })
+        .filter(Boolean)
+        .sort((a, b) => (b.submittedAt || b.submitted_at || 0) - (a.submittedAt || a.submitted_at || 0));
+    } catch (readError) {
+      console.error('Error reading directory:', readError);
+      // Return empty array if can't read
+      files = [];
+    }
     
     return {
       statusCode: 200,
@@ -56,13 +75,14 @@ async function handleGet() {
       body: JSON.stringify({ data: files })
     };
   } catch (error) {
+    console.error('GET handler error:', error);
     return {
       statusCode: 500,
       headers: {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*'
       },
-      body: JSON.stringify({ error: error.message })
+      body: JSON.stringify({ error: error.message, stack: process.env.NODE_ENV === 'development' ? error.stack : undefined })
     };
   }
 }
@@ -70,40 +90,68 @@ async function handleGet() {
 // POST: บันทึกข้อมูลใหม่
 async function handlePost(event) {
   try {
-    const data = JSON.parse(event.body);
+    // Parse request body
+    let data;
+    try {
+      data = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
+    } catch (parseError) {
+      console.error('JSON parse error:', parseError);
+      return {
+        statusCode: 400,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        },
+        body: JSON.stringify({
+          success: false,
+          error: 'Invalid JSON in request body'
+        })
+      };
+    }
+    
     const dataDir = ensureDataDir();
     
     // บันทึกลงไฟล์ JSON
-    const filename = `flood-rescue-${Date.now()}.json`;
-    const filepath = path.join(dataDir, filename);
-    fs.writeFileSync(filepath, JSON.stringify(data, null, 2));
-    console.log('✅ Saved to:', filepath);
-    
-    // บันทึกลงไฟล์ CSV
-    const csvLine = [
-      data.id || '',
-      `"${(data.location || '').replace(/"/g, '""')}"`,
-      `"${(data.contact || '').replace(/"/g, '""')}"`,
-      data.severity || '',
-      `"${(data.needs || '').replace(/"/g, '""')}"`,
-      `"${(data.timestamp_context || '').replace(/"/g, '""')}"`,
-      `"${(data.number_of_people || '').replace(/"/g, '""')}"`,
-      `"${(data.weather_condition || '').replace(/"/g, '""')}"`,
-      `"${(data.additional_info || '').replace(/"/g, '""')}"`,
-      data.submitted_at || data.submittedAt || '',
-      `"${(data.url || '').replace(/"/g, '""')}"`
-    ].join(',') + '\n';
-    
-    const csvFile = path.join(dataDir, 'flood-rescue-data.csv');
-    if (!fs.existsSync(csvFile)) {
-      const headers = [
-        'ID', 'Location', 'Contact', 'Severity', 'Needs',
-        'Time Context', 'Number of People', 'Weather Condition',
-        'Additional Info', 'Submitted At', 'URL'
-      ].join(',') + '\n';
-      fs.writeFileSync(csvFile, '\uFEFF' + headers);
+    try {
+      const filename = `flood-rescue-${Date.now()}.json`;
+      const filepath = path.join(dataDir, filename);
+      fs.writeFileSync(filepath, JSON.stringify(data, null, 2), 'utf8');
+      console.log('✅ Saved to:', filepath);
+    } catch (writeError) {
+      console.error('Error writing JSON file:', writeError);
+      // Continue even if JSON write fails
     }
-    fs.appendFileSync(csvFile, csvLine);
+    
+    // บันทึกลงไฟล์ CSV (optional, don't fail if this fails)
+    try {
+      const csvLine = [
+        data.id || '',
+        `"${(data.location || '').replace(/"/g, '""')}"`,
+        `"${(data.contact || '').replace(/"/g, '""')}"`,
+        data.severity || '',
+        `"${(data.needs || '').replace(/"/g, '""')}"`,
+        `"${(data.timestamp_context || '').replace(/"/g, '""')}"`,
+        `"${(data.number_of_people || '').replace(/"/g, '""')}"`,
+        `"${(data.weather_condition || '').replace(/"/g, '""')}"`,
+        `"${(data.additional_info || '').replace(/"/g, '""')}"`,
+        data.submitted_at || data.submittedAt || '',
+        `"${(data.url || '').replace(/"/g, '""')}"`
+      ].join(',') + '\n';
+      
+      const csvFile = path.join(dataDir, 'flood-rescue-data.csv');
+      if (!fs.existsSync(csvFile)) {
+        const headers = [
+          'ID', 'Location', 'Contact', 'Severity', 'Needs',
+          'Time Context', 'Number of People', 'Weather Condition',
+          'Additional Info', 'Submitted At', 'URL'
+        ].join(',') + '\n';
+        fs.writeFileSync(csvFile, '\uFEFF' + headers, 'utf8');
+      }
+      fs.appendFileSync(csvFile, csvLine, 'utf8');
+    } catch (csvError) {
+      console.error('Error writing CSV file:', csvError);
+      // Don't fail the request if CSV write fails
+    }
     
     return {
       statusCode: 200,
@@ -120,7 +168,7 @@ async function handlePost(event) {
       })
     };
   } catch (error) {
-    console.error('❌ Error:', error);
+    console.error('❌ POST handler error:', error);
     return {
       statusCode: 500,
       headers: {
@@ -129,7 +177,8 @@ async function handlePost(event) {
       },
       body: JSON.stringify({
         success: false,
-        error: error.message
+        error: error.message,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
       })
     };
   }
@@ -137,15 +186,15 @@ async function handlePost(event) {
 
 // Vercel Serverless Function Handler
 module.exports = async (req, res) => {
-  // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    return res.status(200).end();
-  }
-
   try {
+    // Handle CORS preflight
+    if (req.method === 'OPTIONS') {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      return res.status(200).end();
+    }
+
     let result;
     
     if (req.method === 'GET') {
@@ -157,14 +206,23 @@ module.exports = async (req, res) => {
     }
     
     // Set headers
-    Object.keys(result.headers || {}).forEach(key => {
-      res.setHeader(key, result.headers[key]);
-    });
+    if (result.headers) {
+      Object.keys(result.headers).forEach(key => {
+        res.setHeader(key, result.headers[key]);
+      });
+    }
     
-    return res.status(result.statusCode).send(result.body);
+    // Send response
+    const statusCode = result.statusCode || 200;
+    const body = typeof result.body === 'string' ? result.body : JSON.stringify(result.body);
+    return res.status(statusCode).send(body);
   } catch (error) {
     console.error('Handler error:', error);
-    return res.status(500).json({ error: error.message });
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    return res.status(500).json({ 
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 };
 
