@@ -4,6 +4,10 @@
     {
       "src": "api/flood-rescue.js",
       "use": "@vercel/node"
+    },
+    {
+      "src": "index.html",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
@@ -11,6 +15,10 @@
       "src": "/api/flood-rescue",
       "methods": ["GET", "POST", "OPTIONS"],
       "dest": "/api/flood-rescue.js"
+    },
+    {
+      "src": "/",
+      "dest": "/index.html"
     }
   ]
 }
