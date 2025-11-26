@@ -16,15 +16,24 @@ export default async (req, res) => {
   }
 
   try {
-    // Try to read index.html
+    // Try to read dashboard-static.html first, then index.html, then fallback to inline HTML
     let html;
     try {
-      const indexPath = path.join(__dirname, '../index.html');
-      html = fs.readFileSync(indexPath, 'utf8');
-    } catch (readError) {
-      // If can't read file, serve inline HTML
-      console.warn('Could not read index.html, serving inline HTML:', readError.message);
-      html = getInlineHTML();
+      // Try dashboard-static.html first (Dashboard)
+      const dashboardPath = path.join(__dirname, '../dashboard-static.html');
+      html = fs.readFileSync(dashboardPath, 'utf8');
+      console.log('✅ Serving dashboard-static.html');
+    } catch (dashboardError) {
+      try {
+        // Fallback to index.html
+        const indexPath = path.join(__dirname, '../index.html');
+        html = fs.readFileSync(indexPath, 'utf8');
+        console.log('✅ Serving index.html');
+      } catch (indexError) {
+        // If can't read file, serve inline HTML
+        console.warn('Could not read dashboard-static.html or index.html, serving inline HTML');
+        html = getInlineHTML();
+      }
     }
     
     res.setHeader('Content-Type', 'text/html');
