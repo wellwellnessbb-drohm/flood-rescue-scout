@@ -34,7 +34,7 @@
                 <input type="text" id="apiUrlInput" 
                        placeholder="https://yourdomain.com/api/flood-rescue" 
                        class="flex-1 border border-yellow-300 rounded-md px-3 py-2"
-                       value="">
+                       value="https://2025-flood-rescue-scout-iuvs.vercel.app/api/flood-rescue">
                 <button id="saveApiUrl" class="bg-yellow-600 text-white px-4 py-2 rounded-md hover:bg-yellow-700">
                     บันทึก
                 </button>
@@ -136,12 +136,8 @@
             const saved = localStorage.getItem('floodRescueApiUrl');
             if (saved) return saved;
             
-            // Auto-detect: ถ้าอยู่บนโดเมนเดียวกัน ใช้ relative path
-            if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-                return window.location.origin + '/api/flood-rescue';
-            }
-            
-            return 'http://localhost:3000/api/flood-rescue';
+            // Default: ใช้ Vercel API URL
+            return 'https://2025-flood-rescue-scout-iuvs.vercel.app/api/flood-rescue';
         }
 
         let API_URL = getApiUrl();
@@ -304,4 +300,5 @@
     </script>
 </body>
 </html>
+
 
