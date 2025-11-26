@@ -1,13 +1,18 @@
 // Vercel Serverless Function สำหรับ Flood Rescue Scout
 // ไฟล์นี้จะถูก deploy เป็น /api/flood-rescue
 
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Get __dirname equivalent in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // สำหรับ Vercel: ใช้ /tmp directory (writable)
 const getDataDir = () => {
   // Vercel ใช้ /tmp สำหรับเขียนไฟล์
-  if (process.env.VERCEL) {
+  if (process.env.VERCEL || process.env.VERCEL_ENV) {
     return '/tmp/flood-rescue-data';
   }
   // Local development
@@ -185,7 +190,7 @@ async function handlePost(event) {
 }
 
 // Vercel Serverless Function Handler
-module.exports = async (req, res) => {
+export default async (req, res) => {
   try {
     // Handle CORS preflight
     if (req.method === 'OPTIONS') {

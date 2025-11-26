@@ -1,10 +1,15 @@
 // Root handler for Vercel
 // Serve index.html at root path
 
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-module.exports = async (req, res) => {
+// Get __dirname equivalent in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+export default async (req, res) => {
   // Only handle GET requests for root
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
