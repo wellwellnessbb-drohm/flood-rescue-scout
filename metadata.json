@@ -1,0 +1,5 @@
+{
+  "name": "Top Comment Generator",
+  "description": "Analyze social media posts and generate constructive top comments using Google Gemini.",
+  "requestFramePermissions": []
+}

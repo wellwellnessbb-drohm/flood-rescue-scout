@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flood Rescue Scout - Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .severity-critical { background-color: #fee2e2; border-color: #ef4444; }
+        .severity-high { background-color: #fed7aa; border-color: #f97316; }
+        .severity-normal { background-color: #fef3c7; border-color: #eab308; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg shadow-lg p-6 mb-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold mb-2">🚨 Flood Rescue Scout</h1>
+                    <p class="text-red-100">Dashboard - ข้อมูลช่วยเหลือน้ำท่วม</p>
+                </div>
+                <div class="text-right">
+                    <div class="text-2xl font-bold" id="totalCount">0</div>
+                    <div class="text-red-100 text-sm">รายการทั้งหมด</div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Filters -->
+        <div class="bg-white rounded-lg shadow-md p-4 mb-6">
+            <div class="flex flex-wrap gap-4 items-center">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Severity:</label>
+                    <select id="severityFilter" class="border border-gray-300 rounded-md px-3 py-2">
+                        <option value="all">ทั้งหมด</option>
+                        <option value="Critical">Critical</option>
+                        <option value="High">High</option>
+                        <option value="Normal">Normal</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">ค้นหา:</label>
+                    <input type="text" id="searchInput" placeholder="ค้นหาตำแหน่ง, เบอร์โทร..." 
+                           class="border border-gray-300 rounded-md px-3 py-2 w-64">
+                </div>
+                <div class="flex-1"></div>
+                <div>
+                    <button id="refreshBtn" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
+                        🔄 รีเฟรช
+                    </button>
+                    <button id="exportBtn" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 ml-2">
+                        📥 Export JSON
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-red-100 border-2 border-red-300 rounded-lg p-4">
+                <div class="text-3xl font-bold text-red-700" id="criticalCount">0</div>
+                <div class="text-red-600 font-semibold">Critical</div>
+            </div>
+            <div class="bg-orange-100 border-2 border-orange-300 rounded-lg p-4">
+                <div class="text-3xl font-bold text-orange-700" id="highCount">0</div>
+                <div class="text-orange-600 font-semibold">High</div>
+            </div>
+            <div class="bg-yellow-100 border-2 border-yellow-300 rounded-lg p-4">
+                <div class="text-3xl font-bold text-yellow-700" id="normalCount">0</div>
+                <div class="text-yellow-600 font-semibold">Normal</div>
+            </div>
+            <div class="bg-blue-100 border-2 border-blue-300 rounded-lg p-4">
+                <div class="text-3xl font-bold text-blue-700" id="totalPeople">0</div>
+                <div class="text-blue-600 font-semibold">คนที่ต้องการความช่วยเหลือ</div>
+            </div>
+        </div>
+
+        <!-- Data Table -->
+        <div class="bg-white rounded-lg shadow-md overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-100">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Severity</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Location</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Contact</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Needs</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">People</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Time</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dataTableBody" class="divide-y divide-gray-200">
+                        <tr>
+                            <td colspan="7" class="px-4 py-8 text-center text-gray-500">
+                                กำลังโหลดข้อมูล...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div id="loadingIndicator" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+            <div class="bg-white rounded-lg p-6">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                <p class="mt-4 text-gray-700">กำลังโหลดข้อมูล...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allData = [];
+        const API_URL = window.location.hostname === 'localhost' 
+            ? 'http://localhost:3000/api/flood-rescue'
+            : '/api/flood-rescue';
+
+        async function loadData() {
+            try {
+                document.getElementById('loadingIndicator').classList.remove('hidden');
+                const response = await fetch(API_URL);
+                const result = await response.json();
+                allData = result.data || [];
+                renderData(allData);
+                updateStats(allData);
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('dataTableBody').innerHTML = `
+                    <tr>
+                        <td colspan="7" class="px-4 py-8 text-center text-red-500">
+                            ❌ ไม่สามารถโหลดข้อมูลได้: ${error.message}
+                            <br><small>ตรวจสอบว่า API Server รันอยู่ที่ ${API_URL}</small>
+                        </td>
+                    </tr>
+                `;
+            } finally {
+                document.getElementById('loadingIndicator').classList.add('hidden');
+            }
+        }
+
+        function renderData(data) {
+            const tbody = document.getElementById('dataTableBody');
+            
+            if (data.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="px-4 py-8 text-center text-gray-500">
+                            ไม่มีข้อมูล
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = data.map(item => {
+                const severityClass = `severity-${item.severity.toLowerCase()}`;
+                const submittedDate = new Date(item.submitted_at || item.submittedAt).toLocaleString('th-TH');
+                
+                return `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-3">
+                            <span class="px-2 py-1 rounded-full text-xs font-semibold ${severityClass} border">
+                                ${item.severity}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-sm">
+                            <div class="font-medium text-gray-900">${item.location || 'ไม่ระบุ'}</div>
+                            ${item.additional_info ? `<div class="text-xs text-gray-500 mt-1">${item.additional_info}</div>` : ''}
+                        </td>
+                        <td class="px-4 py-3 text-sm">
+                            <div class="text-gray-900">${item.contact || 'ไม่ระบุ'}</div>
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-900">${item.needs || 'ไม่ระบุ'}</td>
+                        <td class="px-4 py-3 text-sm text-gray-900">${item.number_of_people || 'ไม่ระบุ'}</td>
+                        <td class="px-4 py-3 text-sm text-gray-500">${item.timestamp_context || 'ไม่ระบุ'}</td>
+                        <td class="px-4 py-3 text-sm">
+                            <a href="${item.url}" target="_blank" 
+                               class="text-blue-600 hover:text-blue-800 underline">ดูโพสต์</a>
+                            <br>
+                            <small class="text-gray-400">${submittedDate}</small>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function updateStats(data) {
+            const critical = data.filter(d => d.severity === 'Critical').length;
+            const high = data.filter(d => d.severity === 'High').length;
+            const normal = data.filter(d => d.severity === 'Normal').length;
+            
+            document.getElementById('totalCount').textContent = data.length;
+            document.getElementById('criticalCount').textContent = critical;
+            document.getElementById('highCount').textContent = high;
+            document.getElementById('normalCount').textContent = normal;
+            
+            // คำนวณจำนวนคน (ถ้ามีข้อมูล)
+            const totalPeople = data.reduce((sum, item) => {
+                const people = item.number_of_people?.match(/\d+/);
+                return sum + (people ? parseInt(people[0]) : 0);
+            }, 0);
+            document.getElementById('totalPeople').textContent = totalPeople || 'N/A';
+        }
+
+        function filterData() {
+            const severityFilter = document.getElementById('severityFilter').value;
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            
+            let filtered = allData;
+            
+            if (severityFilter !== 'all') {
+                filtered = filtered.filter(item => item.severity === severityFilter);
+            }
+            
+            if (searchTerm) {
+                filtered = filtered.filter(item => {
+                    const searchable = [
+                        item.location,
+                        item.contact,
+                        item.needs,
+                        item.number_of_people,
+                        item.weather_condition
+                    ].join(' ').toLowerCase();
+                    return searchable.includes(searchTerm);
+                });
+            }
+            
+            renderData(filtered);
+            updateStats(filtered);
+        }
+
+        function exportJSON() {
+            const dataStr = JSON.stringify(allData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `flood-rescue-data-${new Date().toISOString().split('T')[0]}.json`;
+            link.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // Event Listeners
+        document.getElementById('severityFilter').addEventListener('change', filterData);
+        document.getElementById('searchInput').addEventListener('input', filterData);
+        document.getElementById('refreshBtn').addEventListener('click', loadData);
+        document.getElementById('exportBtn').addEventListener('click', exportJSON);
+
+        // Auto-refresh every 30 seconds
+        setInterval(loadData, 30000);
+
+        // Load data on page load
+        loadData();
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "functions": {
+    "api/flood-rescue.js": {
+      "runtime": "nodejs18.x"
+    }
+  },
+  "routes": [
+    {
+      "src": "/api/flood-rescue",
+      "methods": ["GET", "POST", "OPTIONS"],
+      "dest": "/api/flood-rescue.js"
+    }
+  ]
+}
+
